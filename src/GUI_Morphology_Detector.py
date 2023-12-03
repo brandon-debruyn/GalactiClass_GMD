@@ -19,14 +19,13 @@ def classify_image(filepaths):
     for i, file_path in enumerate(filepaths):
         # Read and process image
         image = cv2.imread(file_path)
-        cropped_image, irregular_confidence = classifier.detect_morphology(image)
-
+        confidences = classifier.detect_morphology(image)
+        print(confidences)
         # Plot the result image
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         axs[i].imshow(image_rgb)
         # Display confidence score in the title
-        axs[i].set_title(f"Galaxy: {i+1}\nIrregular confidence: {irregular_confidence:.2f}")
-        axs[i].axis('off')
+        axs[i].set_title(f"Galaxy: {i+1}\nElliptical: {confidences['elliptical']:.2f}\nSpiral: {confidences['spiral']:.2f}\nIrregular: {confidences['irregular']:.2f}")
 
     canvas = FigureCanvasTkAgg(fig, master=root)
     canvas_widget = canvas.get_tk_widget()
