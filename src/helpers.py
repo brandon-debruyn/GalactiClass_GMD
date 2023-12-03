@@ -19,7 +19,7 @@ class GalacticClass_Helpers(object):
         return max(contours, key=cv2.contourArea) if contours else None
 
     @staticmethod
-    def get_galaxy_ellipticity(image, galaxy_contour):
+    def get_galaxy_ellipticity(image, galaxy_contour) -> tuple:
         """
         Calculate the ellipticity of a galaxy based on its nucleus contour.
 
@@ -32,7 +32,6 @@ class GalacticClass_Helpers(object):
             ellipse = cv2.fitEllipse(galaxy_contour)
             cv2.ellipse(image, ellipse, (255, 0, 0), 2)
 
-            # Extracting major and minor axes and calculating ellipticity
             (centroid_x, centroid_y), (MA, ma), angle = ellipse
             a = MA / 2
             b = ma / 2
@@ -43,9 +42,9 @@ class GalacticClass_Helpers(object):
         return centroid_x, centroid_y, hubble_ellipticity
 
     @staticmethod
-    def elliptical_brightness_law(rad, central_brightness, scale_length):
+    def elliptical_brightness_law(rad, central_brightness, scale_length) -> float:
         """
-        Calculate the brightness at a given radius based on the elliptical brightness law.
+        Calculate the brightness at a given radius based on the elliptical monotonical brightness law.
 
         :param rad: Radius.
         :param central_brightness: Central brightness.
@@ -59,7 +58,7 @@ class GalacticClass_Helpers(object):
         """
         Fit a brightness profile according to the elliptical brightness law.
 
-        :param brightness_profile: Brightness profile of a galaxy.
+        :param brightness_profile: Brightness profile of an galaxy.
         :return: Fitted parameters or None if fitting fails.
         """
         radii = np.arange(len(brightness_profile))
@@ -70,7 +69,7 @@ class GalacticClass_Helpers(object):
             return None
 
     @staticmethod
-    def calculate_r_squared(brightness_profile, fitted_params):
+    def calculate_r_squared(brightness_profile, fitted_params) -> float:
         """
         Calculate the R-squared value for the fit of the brightness profile.
 
@@ -91,6 +90,9 @@ class GalacticClass_Helpers(object):
     def calculate_color_brightness_profile(image, centroid_x=None, centroid_y=None):
         """
         Calculate the brightness profile of each color channel in a galaxy image.
+        
+        S. S. McGaugh, G. D. Bothun, and J. M. Schombert, “Galaxy selection and the Surface Brightness Distribution,” 
+            The Astronomical Journal, vol. 110, p. 573, 1995. doi:10.1086/117543 
 
         :param image: Input galaxy image.
         :param centroid_x: x-coordinate of the galaxy's centroid (optional).
@@ -122,10 +124,13 @@ class GalacticClass_Helpers(object):
         return color_brightness_profiles
     
     @staticmethod
-    def elliptical_brightness_profile(brightness_profile):
+    def elliptical_brightness_profile(brightness_profile) -> bool:
         """
         Determine if the brightness profile is decreasing monotonically outward towards the edge
         of the galaxy. Some tolerance error is given for image noise.
+
+        S. S. McGaugh, G. D. Bothun, and J. M. Schombert, “Galaxy selection and the Surface Brightness Distribution,” 
+        The Astronomical Journal, vol. 110, p. 573, 1995. doi:10.1086/117543 
 
         :param brightness_profile: Brightness profile to be evaluated.
         :return: Boolean indicating if the brightness profile is decreasing monotonically outward towards the edge of the galaxy.
@@ -143,7 +148,7 @@ class GalacticClass_Helpers(object):
         return True
     
     @staticmethod
-    def calculate_gini_coefficient(image):
+    def calculate_gini_coefficient(image) -> float:
         """
         Calculate the Gini coefficient for an image, a measure of inequality in pixel values.
 
@@ -161,12 +166,15 @@ class GalacticClass_Helpers(object):
         n = len(sorted_pixels)
         index = np.arange(1, n+1)
 
-        return (np.sum((2 * index - n - 1) * sorted_pixels)) / (n * np.sum(sorted_pixels)) if np.sum(sorted_pixels) != 0 else 0
+        return (np.sum((2 * index - n - 1) * sorted_pixels)) / (n * np.sum(sorted_pixels)) if np.sum(sorted_pixels) != 0 else 0.0
     
     @staticmethod
-    def calculate_asymmetry_index_cont(image):
+    def calculate_asymmetry_index_cont(image) -> float:
         """
         Calculate the asymmetry index of a galaxy, indicating deviation from symmetry.
+
+        C. J. Conselice, M. A. Bershady, and A. Jangren, “The Asymmetry of Galaxies: Physical Morphology for Nearby and High‐Redshift Galaxies,” 
+        The Astrophysical Journal, vol. 529, no. 2, pp. 886–910, 2000. doi:10.1086/308300
 
         :param image: Input galaxy image.
         :return: Asymmetry index of the galaxy.
@@ -175,29 +183,45 @@ class GalacticClass_Helpers(object):
         if len(image.shape) > 2:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        # Creating a binary mask based on a threshold
-        _, binary_mask = cv2.threshold(image, np.percentile(image, 90), 255, cv2.THRESH_BINARY)
-
-        # Finding contours in the binary mask
+        # Apply gaussian blur to image using kernel to reduce noise and small features like stars
+        # Mather, P. M. 2004. Computer Processing of Remotely Sensed Images, An Introduction. West Sussex. John Wiley & Sons Ltd
+        gaus_blur_kern_5 = np.array([
+            [1, 4, 6, 4, 1], 
+            [4, 16, 24, 16, 4],
+            [6, 24, 36, 24, 6], 
+            [4, 16, 24, 16, 4], 
+            [1, 4, 6, 4, 1]])
+        img_gaus_blurred = cv2.filter2D(image, ddepth=-1, kernel=gaus_blur_kern_5 / (np.sum(gaus_blur_kern_5)))
+        
+        # Creating a binary mask based on a threshold and finding contours in the mask
+        _, binary_mask = cv2.threshold(img_gaus_blurred, np.percentile(image, 95), 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+        # If no contours are found, return nothing
         if not contours:
-            return None
+            return binary_mask, None
 
-        # Focusing on the largest contour
+        # Find the largest contour - this is the galaxy and fill the largest contour for the mask
         largest_contour = max(contours, key=cv2.contourArea)
         mask_largest = np.zeros_like(image)
         cv2.drawContours(mask_largest, [largest_contour], -1, color=255, thickness=cv2.FILLED)
 
+        # Apply the mask to the original grayscale image
         masked_image = cv2.bitwise_and(image, image, mask=mask_largest)
-        rotated = cv2.rotate(masked_image, cv2.ROTATE_180)
 
-        return np.sum(np.abs(masked_image - rotated)) / np.sum(masked_image) if np.sum(masked_image) != 0 else 0
+        # Rotate the image by 180 degrees and Calculate the asymmetry index
+        rotated = cv2.rotate(masked_image, cv2.ROTATE_180)        
+        asymmetry_index = np.sum(np.abs(masked_image - rotated)) / np.sum(masked_image) if np.sum(masked_image) != 0 else 0
+        
+        return asymmetry_index
 
     @staticmethod
     def calculate_color_gradients(image):
         """
         Calculate the color gradients within a galaxy image.
+        
+        M. Franx and G. Illingworth, “Color gradients in elliptical galaxies,” 
+        The Astrophysical Journal, vol. 359, 1990. doi:10.1086/185791
 
         :param image: Input galaxy image.
         :return: List of average gradients for each color channel.
@@ -207,23 +231,32 @@ class GalacticClass_Helpers(object):
 
         # Generating a binary mask
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Creating a binary mask based on a threshold and finding contours in the mask
         _, binary_mask = cv2.threshold(gray, np.percentile(gray, 90), 255, cv2.THRESH_BINARY)
-
         contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         if not contours:
             return [0, 0, 0]
 
+        # Find the largest contour - this is the galaxy and fill the largest contour for the mask
         largest_contour = max(contours, key=cv2.contourArea)
         mask_largest = np.zeros_like(gray)
         cv2.drawContours(mask_largest, [largest_contour], -1, color=255, thickness=cv2.FILLED)
 
+        # loop over each color channel in the BGR image
         gradients = []
         for i in range(3):  # Assuming BGR format
             channel = image[:, :, i]
+            
+            # for each color channel a mask is generated to extract the current color channel intensities
             masked_channel = cv2.bitwise_and(channel, channel, mask=mask_largest)
+            
+            # the change in color intensity gets calculated with respect to x and y 
             grad_x = cv2.Sobel(masked_channel, cv2.CV_64F, 1, 0, ksize=5)
             grad_y = cv2.Sobel(masked_channel, cv2.CV_64F, 0, 1, ksize=5)
+            
+            # the gradient is calculated by considering the magnitude of the vectors and the mean is appended as the color channels gradient
             grad = np.sqrt(grad_x**2 + grad_y**2)
             gradients.append(np.mean(grad))
 
