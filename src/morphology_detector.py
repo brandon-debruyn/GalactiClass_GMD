@@ -105,13 +105,37 @@ class GalactiClass_MorphologyDetector(object):
         #return cropped_image # testing
         
     def _get_spiral_confidence(self, image):
-        """
-        Placeholder for calculating the confidence that a given image is of a spiral galaxy.
+        
+        # Global thresholds
+        threshold_bulge_size = 1000
+        threshold_std_dev = 10
+        threshold_blue_ratio = 0.70
+        
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        contours, _ = cv2.findContours(gray_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        galaxy_contour = self.helpers.get_largest_contour(contours)
 
-        :param image: The image of the galaxy.
-        :return: The confidence percentage that the galaxy is spiral (to be implemented).
-        """
-        pass
+        ellipticity, ellipse = self.helpers.calculate_ellipticity(galaxy_contour)
+        blue_ratio, blue_image = self.helpers.color_analysis(image, galaxy_contour)
+        bulge_size, bulge_image = self.helpers.locate_and_measure_bulge(image, galaxy_contour)
+        radial_profile_values = self.helpers.calculate_radial_profile(gray_image, ellipse[0])
+        is_likely_spiral_intensity = self.helpers.analyze_intensity_profile(radial_profile_values, threshold_std_dev)
+        asymmetry_index_value = self.helpers.asymmetry_index(gray_image)
+
+        # Conditions and their respective likelihood contributions
+        conditions = [
+            (ellipticity > 0.1, 20),
+            (blue_ratio > 0.05 and blue_ratio < threshold_blue_ratio, 20),
+            (bulge_size > threshold_bulge_size, 20),
+            (is_likely_spiral_intensity, 20),
+            (2 < asymmetry_index_value < 3, 20) 
+        ]
+
+        # Calculate the likelihood percentage
+        likelihood_percentage = sum(percent for condition, percent in conditions if condition)
+
+        return likelihood_percentage
+    
     def _get_irregular_confidence(self, image):
         pass
 
@@ -129,3 +153,4 @@ class GalactiClass_MorphologyDetector(object):
         self.class_confidence['irregular'] = self._get_irregular_confidence(image)
 
         return self.class_confidence
+
