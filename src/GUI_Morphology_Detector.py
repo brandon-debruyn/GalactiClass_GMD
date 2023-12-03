@@ -13,19 +13,23 @@ def upload_image():
 
 def classify_image(filepaths):
     num_files = len(filepaths)
-    fig, axs = plt.subplots(1, num_files, figsize=(5 * num_files, 5), squeeze=False)
+    fig, axs = plt.subplots(1, num_files, figsize=(5 * num_files, 6), squeeze=False)
     axs = axs.flatten()
 
     for i, file_path in enumerate(filepaths):
         # Read and process image
         image = cv2.imread(file_path)
         confidences = classifier.detect_morphology(image)
-        print(confidences)
+
+        # Determine the highest confidence
+        galaxy_type = max(confidences, key=confidences.get)
+
         # Plot the result image
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         axs[i].imshow(image_rgb)
-        # Display confidence score in the title
-        axs[i].set_title(f"Galaxy: {i+1}\nElliptical: {confidences['elliptical']:.2f}\nSpiral: {confidences['spiral']:.2f}\nIrregular: {confidences['irregular']:.2f}")
+        
+        # Display confidence score and galaxy type in the title
+        axs[i].set_title(f"Galaxy: {i+1}\nElliptical: {confidences['elliptical']:.2f}\nSpiral: {confidences['spiral']:.2f}\nIrregular: {confidences['irregular']:.2f}\nType: {galaxy_type.capitalize()}", pad=20)  # Add padding for the title
 
     canvas = FigureCanvasTkAgg(fig, master=root)
     canvas_widget = canvas.get_tk_widget()
