@@ -261,3 +261,90 @@ class GalacticClass_Helpers(object):
             gradients.append(np.mean(grad))
 
         return gradients
+    
+# Stephen helpers below - just put comment to show changes / whats added
+    @staticmethod
+    def calculate_ellipticity(contour):
+        ellipse = cv.fitEllipse(contour)
+        (center, axes, orientation) = ellipse
+        major_axis_length = max(axes)
+        minor_axis_length = min(axes)
+        ellipticity = 1 - (minor_axis_length / major_axis_length)
+        return ellipticity, ellipse
+    @staticmethod
+    def color_analysis(image, contour):
+        hsv_image = cv.cvtColor(image, cv.COLOR_BGR2HSV)
+        lower_blue = np.array([100, 50, 50])
+        upper_blue = np.array([140, 255, 255])
+        blue_mask = cv.inRange(hsv_image, lower_blue, upper_blue)
+        blue_image = cv.bitwise_and(image, image, mask=blue_mask)
+        blue_area = np.sum(blue_mask) / 255
+        contour_area = cv.contourArea(contour)
+        blue_ratio = blue_area / contour_area if contour_area != 0 else 0
+        return blue_ratio, blue_image
+    
+    @staticmethod
+    def locate_and_measure_bulge(isolated_image, contour):
+        gray_image = cv.cvtColor(isolated_image, cv.COLOR_BGR2GRAY)
+        M = cv.moments(contour)
+        centroid_x = int(M["m10"] / M["m00"]) if M["m00"] != 0 else isolated_image.shape[1] // 2
+        centroid_y = int(M["m01"] / M["m00"]) if M["m00"] != 0 else isolated_image.shape[0] // 2
+        radius = int(np.sqrt(cv.contourArea(contour)) / 10)  # Dynamic radius based on the contour area
+        bulge_mask = np.zeros_like(gray_image)
+        cv.circle(bulge_mask, (centroid_x, centroid_y), radius, 255, -1)
+        bulge_region = cv.bitwise_and(gray_image, gray_image, mask=bulge_mask)
+        bulge_contours, _ = cv.findContours(bulge_region, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        if not bulge_contours:
+            return 0, isolated_image
+        bulge_contour = max(bulge_contours, key=cv.contourArea)
+        bulge_size = cv.contourArea(bulge_contour)
+        bulge_image = isolated_image.copy()
+        cv.drawContours(bulge_image, [bulge_contour], -1, (0, 255, 0), 2)
+        return bulge_size, bulge_image
+    
+    @staticmethod
+    def calculate_radial_profile(image, center):
+        y, x = np.ogrid[:image.shape[0], :image.shape[1]]
+        r = np.sqrt((x - center[0])**2 + (y - center[1])**2)
+        r = r.astype(int)
+
+        tbin = np.bincount(r.ravel(), image.ravel())
+        nr = np.bincount(r.ravel())
+        radialprofile = tbin / nr
+        return radialprofile
+    
+    @staticmethod
+    def analyze_intensity_profile(profile, threshold_std_dev):
+        peaks, _ = find_peaks(profile, prominence=0.05 * np.max(profile))
+        std_dev = np.std(profile)
+        likely_spiral = len(peaks) > 2 and std_dev > threshold_std_dev
+        return likely_spiral
+    
+    @staticmethod
+    def asymmetry_index(input_image):
+        # Check if the input image is a color image; if so, convert it to grayscale
+        if len(input_image.shape) > 2:
+            grayscale_image = cv.cvtColor(input_image, cv.COLOR_BGR2GRAY)
+        else:
+            grayscale_image = input_image
+
+        _, binary_mask = cv.threshold(grayscale_image, np.percentile(grayscale_image, 90), 255, cv.THRESH_BINARY)
+        contours, _ = cv.findContours(binary_mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+
+        # If no contours are found, return None
+        if not contours:
+            return None
+
+        # Focus on the largest contour
+        largest_contour = max(contours, key=cv.contourArea)
+        mask_largest = np.zeros_like(grayscale_image)
+        cv.drawContours(mask_largest, [largest_contour], -1, color=255, thickness=cv.FILLED)
+        masked_image = cv.bitwise_and(grayscale_image, grayscale_image, mask=mask_largest)
+
+        rotated_image = cv.rotate(masked_image, cv.ROTATE_180)
+
+        numerator = 2 * np.sum(np.abs(masked_image - rotated_image))
+        denominator = np.sum(masked_image) + np.sum(rotated_image)
+
+        # Avoid division by zero and return the asymmetry index
+        return (numerator / denominator) if denominator != 0 else 0
