@@ -1,5 +1,8 @@
 from common_imports import *
 
+from scipy.stats import skew, kurtosis
+
+
 class GalacticClass_Helpers(object):
     """
     Helper class containing various static methods for galaxy image analysis.
@@ -228,3 +231,41 @@ class GalacticClass_Helpers(object):
             gradients.append(np.mean(grad))
 
         return gradients
+    
+    @staticmethod
+    def calculate_kurtosis_skew(image, mask):
+        """
+        Calculate the kurtosis of an image, a measure of the "peakedness" of the image histogram.
+        :param image: Input grayscale galaxy image.
+        :param mask: Binary mask isolating the galaxy.
+        :return: Skewness and kurtosis of the galaxy's texture.
+        """
+        if len(image.shape) > 2:
+            raise ValueError("Grayscale image required for texture analysis.")
+
+        # Apply mask to the image
+        masked_image = cv2.bitwise_and(image, image, mask=mask)
+        flattened_pixels = masked_image[mask > 0].flatten()
+
+        # Calculate skewness and kurtosis
+        texture_skewness = skew(flattened_pixels)
+        texture_kurtosis = kurtosis(flattened_pixels)
+
+        return texture_kurtosis, texture_skewness
+    
+    @staticmethod
+    def calculate_solidity(largest_contour):
+        """
+        Calculate the solidity of a galaxy based on its contour.
+        :param largest_contour: Contour of the galaxy.
+        :return: Solidity of the galaxy.
+        """
+        area = cv2.contourArea(largest_contour)
+        hull = cv2.convexHull(largest_contour)
+        hull_area = cv2.contourArea(hull)
+        if hull_area == 0:
+            return 0  
+        solidity = float(area) / hull_area
+        
+        
+        return solidity
