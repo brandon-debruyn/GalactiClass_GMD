@@ -16,7 +16,12 @@ class GalactiClass_MorphologyDetector(object):
     }
     
     SPIRAL_THRESHOLD = {}
-    IRREGULAR_THRESHOLD = {}
+    IRREGULAR_THRESHOLD = {
+        'ellipticity': 5,
+        'texture_skewness': 1.05,
+        'texture_kurtosis': 1.5,
+        'solidity': 0.9
+    }
 
     def __init__(self):
         self.helpers = GalacticClass_Helpers()
@@ -55,6 +60,10 @@ class GalactiClass_MorphologyDetector(object):
         """ Check if the color gradients match elliptical galaxy criteria. """
         return 1 if color_gradients[0] < self.ELLIPTICAL_THRESHOLD['color_gradient'] else 0       
 
+    def _check_irregular_ellipticity(self, hubble_ellipticity):
+        """ Check if the ellipticity matches irregular galaxy criteria."""
+        return 1 if hubble_ellipticity is not None and hubble_ellipticity >= self.IRREGULAR_THRESHOLD['ellipticity'] else 0
+    
     def _get_elliptical_confidence(self, image) -> (float):
         """
         Calculate the confidence that a given image is an elliptical galaxy.
@@ -137,7 +146,38 @@ class GalactiClass_MorphologyDetector(object):
         return likelihood_percentage
     
     def _get_irregular_confidence(self, image):
-        pass
+        image_cpy = image.copy()
+
+        RGB_img = cv2.cvtColor(image_cpy, cv2.COLOR_BGR2RGB)
+        gray_img = cv2.cvtColor(RGB_img, cv2.COLOR_RGB2GRAY)
+
+        T, focus_galaxy_mask = cv2.threshold(gray_img, 50, 255, cv2.THRESH_BINARY)
+        cropped_image = self.image_processing.crop_to_galaxy(focus_galaxy_mask, RGB_img)
+        
+        gray_img = cv2.cvtColor(cropped_image, cv2.COLOR_RGB2GRAY)
+        _, thresh = cv2.threshold(gray_img, 175, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        largest_contour = self.helpers.get_largest_contour(contours)
+        texture_skewness, texture_kurtosis = self.helpers.calculate_kurtosis_skew(gray_img, thresh)
+
+        _, _, hubble_ellipticity = self.helpers.get_galaxy_ellipticity(cropped_image, largest_contour)
+
+        solidity = self.helpers.calculate_solidity(largest_contour)
+        # For Testing
+        # Print each feature value
+        #print(f"Ellipticity: {hubble_ellipticity}, Skewness: {texture_skewness}, Kurtosis: {texture_kurtosis}, Solidity: {solidity}")
+
+        confidence = 0
+        confidence += self._check_irregular_ellipticity(hubble_ellipticity)
+        confidence += (1 if texture_skewness > self.IRREGULAR_THRESHOLD['texture_skewness'] else 0)
+        confidence += (1 if texture_kurtosis < self.IRREGULAR_THRESHOLD['texture_kurtosis'] else 0)
+        confidence += (1 if solidity < self.IRREGULAR_THRESHOLD['solidity'] else 0)
+
+        print(f'Irregular confidence = {confidence} / {len(self.IRREGULAR_THRESHOLD.keys())} ({(confidence / len(self.IRREGULAR_THRESHOLD.keys())) * 100}%)')
+        irregular_confidence = (confidence / len(self.IRREGULAR_THRESHOLD.keys())) * 100
+
+        return irregular_confidence
 
     def detect_morphology(self, image) -> (dict):
         """

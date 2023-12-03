@@ -1,5 +1,9 @@
 from common_imports import *
 
+from scipy.stats import skew, kurtosis
+from scipy.signal import find_peaks
+
+
 class GalacticClass_Helpers(object):
     """
     Helper class containing various static methods for galaxy image analysis.
@@ -265,7 +269,7 @@ class GalacticClass_Helpers(object):
 # Stephen helpers below - just put comment to show changes / whats added
     @staticmethod
     def calculate_ellipticity(contour):
-        ellipse = cv.fitEllipse(contour)
+        ellipse = cv2.fitEllipse(contour)
         (center, axes, orientation) = ellipse
         major_axis_length = max(axes)
         minor_axis_length = min(axes)
@@ -273,33 +277,33 @@ class GalacticClass_Helpers(object):
         return ellipticity, ellipse
     @staticmethod
     def color_analysis(image, contour):
-        hsv_image = cv.cvtColor(image, cv.COLOR_BGR2HSV)
+        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         lower_blue = np.array([100, 50, 50])
         upper_blue = np.array([140, 255, 255])
-        blue_mask = cv.inRange(hsv_image, lower_blue, upper_blue)
-        blue_image = cv.bitwise_and(image, image, mask=blue_mask)
+        blue_mask = cv2.inRange(hsv_image, lower_blue, upper_blue)
+        blue_image = cv2.bitwise_and(image, image, mask=blue_mask)
         blue_area = np.sum(blue_mask) / 255
-        contour_area = cv.contourArea(contour)
+        contour_area = cv2.contourArea(contour)
         blue_ratio = blue_area / contour_area if contour_area != 0 else 0
         return blue_ratio, blue_image
     
     @staticmethod
     def locate_and_measure_bulge(isolated_image, contour):
-        gray_image = cv.cvtColor(isolated_image, cv.COLOR_BGR2GRAY)
-        M = cv.moments(contour)
+        gray_image = cv2.cvtColor(isolated_image, cv2.COLOR_BGR2GRAY)
+        M = cv2.moments(contour)
         centroid_x = int(M["m10"] / M["m00"]) if M["m00"] != 0 else isolated_image.shape[1] // 2
         centroid_y = int(M["m01"] / M["m00"]) if M["m00"] != 0 else isolated_image.shape[0] // 2
-        radius = int(np.sqrt(cv.contourArea(contour)) / 10)  # Dynamic radius based on the contour area
+        radius = int(np.sqrt(cv2.contourArea(contour)) / 10)  # Dynamic radius based on the contour area
         bulge_mask = np.zeros_like(gray_image)
-        cv.circle(bulge_mask, (centroid_x, centroid_y), radius, 255, -1)
-        bulge_region = cv.bitwise_and(gray_image, gray_image, mask=bulge_mask)
-        bulge_contours, _ = cv.findContours(bulge_region, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        cv2.circle(bulge_mask, (centroid_x, centroid_y), radius, 255, -1)
+        bulge_region = cv2.bitwise_and(gray_image, gray_image, mask=bulge_mask)
+        bulge_contours, _ = cv2.findContours(bulge_region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not bulge_contours:
             return 0, isolated_image
-        bulge_contour = max(bulge_contours, key=cv.contourArea)
-        bulge_size = cv.contourArea(bulge_contour)
+        bulge_contour = max(bulge_contours, key=cv2.contourArea)
+        bulge_size = cv2.contourArea(bulge_contour)
         bulge_image = isolated_image.copy()
-        cv.drawContours(bulge_image, [bulge_contour], -1, (0, 255, 0), 2)
+        cv2.drawContours(bulge_image, [bulge_contour], -1, (0, 255, 0), 2)
         return bulge_size, bulge_image
     
     @staticmethod
@@ -324,27 +328,66 @@ class GalacticClass_Helpers(object):
     def asymmetry_index(input_image):
         # Check if the input image is a color image; if so, convert it to grayscale
         if len(input_image.shape) > 2:
-            grayscale_image = cv.cvtColor(input_image, cv.COLOR_BGR2GRAY)
+            grayscale_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
         else:
             grayscale_image = input_image
 
-        _, binary_mask = cv.threshold(grayscale_image, np.percentile(grayscale_image, 90), 255, cv.THRESH_BINARY)
-        contours, _ = cv.findContours(binary_mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        _, binary_mask = cv2.threshold(grayscale_image, np.percentile(grayscale_image, 90), 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # If no contours are found, return None
         if not contours:
             return None
 
         # Focus on the largest contour
-        largest_contour = max(contours, key=cv.contourArea)
+        largest_contour = max(contours, key=cv2.contourArea)
         mask_largest = np.zeros_like(grayscale_image)
-        cv.drawContours(mask_largest, [largest_contour], -1, color=255, thickness=cv.FILLED)
-        masked_image = cv.bitwise_and(grayscale_image, grayscale_image, mask=mask_largest)
+        cv2.drawContours(mask_largest, [largest_contour], -1, color=255, thickness=cv2.FILLED)
+        masked_image = cv2.bitwise_and(grayscale_image, grayscale_image, mask=mask_largest)
 
-        rotated_image = cv.rotate(masked_image, cv.ROTATE_180)
+        rotated_image = cv2.rotate(masked_image, cv2.ROTATE_180)
 
         numerator = 2 * np.sum(np.abs(masked_image - rotated_image))
         denominator = np.sum(masked_image) + np.sum(rotated_image)
 
         # Avoid division by zero and return the asymmetry index
         return (numerator / denominator) if denominator != 0 else 0
+
+    
+    @staticmethod
+    def calculate_kurtosis_skew(image, mask):
+        """
+        Calculate the kurtosis of an image, a measure of the "peakedness" of the image histogram.
+        :param image: Input grayscale galaxy image.
+        :param mask: Binary mask isolating the galaxy.
+        :return: Skewness and kurtosis of the galaxy's texture.
+        """
+        if len(image.shape) > 2:
+            raise ValueError("Grayscale image required for texture analysis.")
+
+        # Apply mask to the image
+        masked_image = cv2.bitwise_and(image, image, mask=mask)
+        flattened_pixels = masked_image[mask > 0].flatten()
+
+        # Calculate skewness and kurtosis
+        texture_skewness = skew(flattened_pixels)
+        texture_kurtosis = kurtosis(flattened_pixels)
+
+        return texture_kurtosis, texture_skewness
+    
+    @staticmethod
+    def calculate_solidity(largest_contour):
+        """
+        Calculate the solidity of a galaxy based on its contour.
+        :param largest_contour: Contour of the galaxy.
+        :return: Solidity of the galaxy.
+        """
+        area = cv2.contourArea(largest_contour)
+        hull = cv2.convexHull(largest_contour)
+        hull_area = cv2.contourArea(hull)
+        if hull_area == 0:
+            return 0  
+        solidity = float(area) / hull_area
+        
+        
+        return solidity
