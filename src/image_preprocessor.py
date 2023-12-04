@@ -1,16 +1,7 @@
 from common_imports import *
 
 class GalactiClass_PreProcessing(object):
-    @staticmethod
-    def preprocess_image(image):
-        # Image preprocessing code
-        pass
 
-    @staticmethod
-    def another_preprocessing_function(image):
-        # Additional preprocessing steps
-        pass
-    
     @staticmethod
     def crop_to_galaxy(galaxy_mask, image):
         """

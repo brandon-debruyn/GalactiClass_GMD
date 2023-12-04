@@ -3,7 +3,6 @@ from common_imports import *
 from scipy.stats import skew, kurtosis
 from scipy.signal import find_peaks
 
-
 class GalacticClass_Helpers(object):
     """
     Helper class containing various static methods for galaxy image analysis.
@@ -11,7 +10,8 @@ class GalacticClass_Helpers(object):
 
     def __init__(self) -> None:
         pass
-
+    
+    # brandon helpers
     @staticmethod
     def get_largest_contour(contours):
         """
@@ -266,15 +266,17 @@ class GalacticClass_Helpers(object):
 
         return gradients
     
-# Stephen helpers below - just put comment to show changes / whats added
+    # Stephen helpers below - just put comment to show changes / whats added
     @staticmethod
     def calculate_ellipticity(contour):
-        ellipse = cv2.fitEllipse(contour)
-        (center, axes, orientation) = ellipse
-        major_axis_length = max(axes)
-        minor_axis_length = min(axes)
-        ellipticity = 1 - (minor_axis_length / major_axis_length)
-        return ellipticity, ellipse
+        if contour is not None and len(contour) >= 5:
+            ellipse = cv2.fitEllipse(contour)
+            (center, axes, orientation) = ellipse
+            major_axis_length = max(axes)
+            minor_axis_length = min(axes)
+            ellipticity = 1 - (minor_axis_length / major_axis_length)
+            return ellipticity, ellipse
+        return -1, None
     @staticmethod
     def color_analysis(image, contour):
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -319,11 +321,13 @@ class GalacticClass_Helpers(object):
     
     @staticmethod
     def analyze_intensity_profile(profile, threshold_std_dev):
-        peaks, _ = find_peaks(profile, prominence=0.05 * np.max(profile))
-        std_dev = np.std(profile)
-        likely_spiral = len(peaks) > 2 and std_dev > threshold_std_dev
-        return likely_spiral
-    
+        if profile is not None and isinstance(profile, np.ndarray):
+            peaks, _ = find_peaks(profile, prominence=0.05 * np.max(profile))
+            std_dev = np.std(profile)
+            likely_spiral = len(peaks) > 2 and std_dev > threshold_std_dev
+            return likely_spiral
+        return 0.0
+        
     @staticmethod
     def asymmetry_index(input_image):
         # Check if the input image is a color image; if so, convert it to grayscale
@@ -352,7 +356,6 @@ class GalacticClass_Helpers(object):
 
         # Avoid division by zero and return the asymmetry index
         return (numerator / denominator) if denominator != 0 else 0
-
     
     @staticmethod
     def calculate_kurtosis_skew(image, mask):
@@ -388,6 +391,5 @@ class GalacticClass_Helpers(object):
         if hull_area == 0:
             return 0  
         solidity = float(area) / hull_area
-        
-        
+
         return solidity

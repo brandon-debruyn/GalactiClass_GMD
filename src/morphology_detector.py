@@ -15,7 +15,6 @@ class GalactiClass_MorphologyDetector(object):
         'color_gradient': 50
     }
     
-    SPIRAL_THRESHOLD = {}
     IRREGULAR_THRESHOLD = {
         'ellipticity': 5,
         'texture_skewness': 1.05,
@@ -111,7 +110,6 @@ class GalactiClass_MorphologyDetector(object):
         print(f' elliptical confidence = {confidence} / {len(self.ELLIPTICAL_THRESHOLD.keys()) + 1} ({(confidence / (len(self.ELLIPTICAL_THRESHOLD.keys()) + 1)) * 100 })')
         
         return (confidence / 6.0) * 100
-        #return cropped_image # testing
         
     def _get_spiral_confidence(self, image):
         
@@ -127,7 +125,7 @@ class GalactiClass_MorphologyDetector(object):
         ellipticity, ellipse = self.helpers.calculate_ellipticity(galaxy_contour)
         blue_ratio, blue_image = self.helpers.color_analysis(image, galaxy_contour)
         bulge_size, bulge_image = self.helpers.locate_and_measure_bulge(image, galaxy_contour)
-        radial_profile_values = self.helpers.calculate_radial_profile(gray_image, ellipse[0])
+        radial_profile_values = self.helpers.calculate_radial_profile(gray_image, ellipse[0]) if ellipse is not None and ellipse[0] else 0.0
         is_likely_spiral_intensity = self.helpers.analyze_intensity_profile(radial_profile_values, threshold_std_dev)
         asymmetry_index_value = self.helpers.asymmetry_index(gray_image)
 
@@ -164,9 +162,6 @@ class GalactiClass_MorphologyDetector(object):
         _, _, hubble_ellipticity = self.helpers.get_galaxy_ellipticity(cropped_image, largest_contour)
 
         solidity = self.helpers.calculate_solidity(largest_contour)
-        # For Testing
-        # Print each feature value
-        #print(f"Ellipticity: {hubble_ellipticity}, Skewness: {texture_skewness}, Kurtosis: {texture_kurtosis}, Solidity: {solidity}")
 
         confidence = 0
         confidence += self._check_irregular_ellipticity(hubble_ellipticity)
@@ -186,8 +181,6 @@ class GalactiClass_MorphologyDetector(object):
         :param image: The image of the galaxy.
         :return: Dictionary containing confidence scores for each galaxy type.
         """
-        #return self._get_elliptical_confidence(image) # testing
-    
         self.class_confidence['elliptical'] = self._get_elliptical_confidence(image)
         self.class_confidence['spiral'] = self._get_spiral_confidence(image)
         self.class_confidence['irregular'] = self._get_irregular_confidence(image)
