@@ -109,7 +109,7 @@ class GalactiClass_MorphologyDetector(object):
                 
         print(f' elliptical confidence = {confidence} / {len(self.ELLIPTICAL_THRESHOLD.keys()) + 1} ({(confidence / (len(self.ELLIPTICAL_THRESHOLD.keys()) + 1)) * 100 })')
         
-        return (confidence / len(self.ELLIPTICAL_THRESHOLD.keys()) + 1) * 100
+        return (confidence / 6.0) * 100
         
     def _get_spiral_confidence(self, image):
         
