@@ -11,7 +11,7 @@ class GalacticClass_Helpers(object):
     def __init__(self) -> None:
         pass
     
-    # brandon helpers
+    # Brandon De Bruyn's helpers
     @staticmethod
     def get_largest_contour(contours):
         """
